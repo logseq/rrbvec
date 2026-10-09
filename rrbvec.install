@@ -1,0 +1,22 @@
+lib: [
+  "_build/install/default/lib/rrbvec/META"
+  "_build/install/default/lib/rrbvec/dune-package"
+  "_build/install/default/lib/rrbvec/opam"
+  "_build/install/default/lib/rrbvec/rrbvec.a"
+  "_build/install/default/lib/rrbvec/rrbvec.cma"
+  "_build/install/default/lib/rrbvec/rrbvec.cmi"
+  "_build/install/default/lib/rrbvec/rrbvec.cms"
+  "_build/install/default/lib/rrbvec/rrbvec.cmsi"
+  "_build/install/default/lib/rrbvec/rrbvec.cmt"
+  "_build/install/default/lib/rrbvec/rrbvec.cmti"
+  "_build/install/default/lib/rrbvec/rrbvec.cmx"
+  "_build/install/default/lib/rrbvec/rrbvec.cmxa"
+  "_build/install/default/lib/rrbvec/rrbvec.ml"
+  "_build/install/default/lib/rrbvec/rrbvec.mli"
+]
+libexec: [
+  "_build/install/default/lib/rrbvec/rrbvec.cmxs"
+]
+doc: [
+  "_build/install/default/doc/rrbvec/README.md"
+]

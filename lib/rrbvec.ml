@@ -1,3 +1,22 @@
+external aunsafe_set_local : 'a array @ local -> int -> 'a @ local -> unit
+  = "%array_unsafe_set"
+external amake_local : int -> 'a @ local -> 'a array = "caml_array_make"
+
+let asub_local (a @ local) start len =
+  let r = amake_local len (Array.unsafe_get a start) in
+  for i = 1 to len - 1 do
+    aunsafe_set_local r i (Array.unsafe_get a (start + i))
+  done;
+  r
+
+let ainit_local n (f : (int -> 'a @ local) @ local) =
+
+  let r = amake_local n (f 0) in
+  for i = 1 to n - 1 do
+    aunsafe_set_local r i (f i)
+  done;
+  r
+
 let bits = 5
 let width = 1 lsl bits
 
@@ -38,11 +57,11 @@ let empty = Empty_vector
 
 let vector_or_empty v = if v.count = 0 then Empty_vector else Vector v
 
-let length = function
+let length  = function
   | Empty_vector -> 0
   | Vector v -> v.count
 
-let is_empty = function
+let is_empty  = function
   | Empty_vector -> true
   | Vector _ -> false
 
@@ -52,12 +71,12 @@ let ensure_count_growth count increment =
   if increment >= max_int || count >= max_int - increment then
     invalid_arg "Rrbvec: maximum length exceeded"
 
-let node_count = function
+let node_count (n @ local) = match n with
   | Empty -> 0
   | Leaf values -> Array.length values
   | Branch branch -> branch.count
 
-let node_height = function
+let node_height (n @ local) = match n with
   | Empty -> -1
   | Leaf _ -> 0
   | Branch branch -> branch.height
@@ -125,20 +144,20 @@ let radix_child_index height index =
   let shift = radix_shift height in
   if shift >= Sys.int_size then 0 else (index lsr shift) land (width - 1)
 
-let find_child sizes height index =
+let find_child (sizes @ local) height index =
   let length = Array.length sizes in
   let start = min (length - 1) (radix_child_index height index) in
-  let rec loop child_index =
+  let rec loop child_index (sizes @ local) =
     if index < Array.unsafe_get sizes child_index then child_index
-    else loop (child_index + 1)
+    else loop (child_index + 1) sizes
   in
-  loop start
+  loop start sizes
 
 let radix_offset height child_index =
   let shift = radix_shift height in
   if shift >= Sys.int_size then 0 else child_index lsl shift
 
-let child_range sizes height index =
+let child_range (sizes @ local) height index =
   match sizes with
   | None ->
       let child_index = radix_child_index height index in
@@ -150,7 +169,7 @@ let child_range sizes height index =
       in
       (child_index, previous_size)
 
-let child_stop_offset sizes height count child_index =
+let child_stop_offset (sizes @ local) height count child_index =
   match sizes with
   | None -> min count (radix_offset height (child_index + 1))
   | Some sizes -> Array.unsafe_get sizes child_index
@@ -554,7 +573,7 @@ let rec get_node node index =
         (Array.unsafe_get branch.children child_index)
         (index - previous_size)
 
-let nth v index =
+let nth v index = 
   match v with
   | Empty_vector -> invalid_index ()
   | Vector v ->
@@ -565,7 +584,7 @@ let nth v index =
         Array.unsafe_get v.tail (index - v.tailoff)
       else get_node v.root (index - head_length)
 
-let nth_opt v index =
+let nth_opt v index = 
   match v with
   | Empty_vector -> None
   | Vector v ->
@@ -933,7 +952,7 @@ let rec fold_left_node f acc node =
       done;
       !acc
 
-let fold_left f acc v =
+let fold_left f acc v = 
   match v with
   | Empty_vector -> acc
   | Vector v ->
@@ -952,7 +971,7 @@ let rec fold_right_node f node acc =
       done;
       !acc
 
-let fold_right f v acc =
+let fold_right f v acc = 
   match v with
   | Empty_vector -> acc
   | Vector v ->
@@ -993,11 +1012,11 @@ let push_front v value =
             head = [| value |];
           }
 
-let peek_back = function
+let peek_back  = function
   | Empty_vector -> invalid_arg "empty vector"
   | Vector v -> peek_back_vector v
 
-let peek_back_opt = function
+let peek_back_opt  = function
   | Empty_vector -> None
   | Vector v -> Some (peek_back_vector v)
 
@@ -1006,11 +1025,11 @@ let peek_front_vector v =
   else if v.root <> Empty then get_node v.root 0
   else Array.unsafe_get v.tail 0
 
-let peek_front = function
+let peek_front  = function
   | Empty_vector -> invalid_arg "empty vector"
   | Vector v -> peek_front_vector v
 
-let peek_front_opt = function
+let peek_front_opt  = function
   | Empty_vector -> None
   | Vector v -> Some (peek_front_vector v)
 
@@ -1018,7 +1037,7 @@ let append = concat
 
 let prepend = concat
 
-let to_array v =
+let to_array v = 
   match v with
   | Empty_vector -> [||]
   | Vector header ->
@@ -1066,7 +1085,7 @@ let finish_nonempty_chunks chunks_rev chunk chunk_length =
   in
   make_with_edges [||] (root_of_full_chunks_rev chunks_rev) tail
 
-let of_list values =
+let of_list values = 
   match values with
   | [] -> empty
   | first :: rest ->
@@ -1083,7 +1102,7 @@ let of_list values =
       in
       loop [] first_chunk 1 rest
 
-let of_seq values =
+let of_seq values = 
   match values () with
   | Seq.Nil -> empty
   | Seq.Cons (first, rest) ->
@@ -1101,7 +1120,7 @@ let of_seq values =
       in
       loop [] first_chunk 1 rest
 
-let of_array values =
+let of_array values = 
   let count = Array.length values in
   if count = 0 then empty
   else
@@ -1386,20 +1405,42 @@ let pop_front v =
       in
       Some result
 
-let rec map_node f = function
-  | Empty -> Empty
-  | Leaf values -> Leaf (Array.map f values)
-  | Branch branch ->
-      let children = Array.map (map_node f) branch.children in
-      Branch { branch with children }
+let acopy_ints (a @ local) =
+  let n = Array.length a in
+  let r = amake_local n 0 in
+  for i = 0 to n - 1 do
+    aunsafe_set_local r i (Array.unsafe_get a i)
+  done;
+  r
 
-let map f v =
+let amap_local (f @ local) (a @ local) =
+  let n = Array.length a in
+  if n = 0 then [||]
+  else begin
+    let r = amake_local n (f (Array.unsafe_get a 0)) in
+    for i = 1 to n - 1 do
+      aunsafe_set_local r i (f (Array.unsafe_get a i))
+    done;
+    r
+  end
+
+let rec map_node (f @ local) (n @ local) =
+  match n with
+  | Empty -> Empty
+  | Leaf values -> Leaf (amap_local f values)
+  | Branch branch ->
+      let children = amap_local (map_node f) branch.children in
+      Branch { branch with
+               sizes = (match branch.sizes with Some sz -> Some (acopy_ints sz) | None -> None);
+               children }
+
+let map (f @ local) (v @ local) = 
   match v with
   | Empty_vector -> empty
   | Vector v ->
-      let head = Array.map f v.head in
+      let head = amap_local f v.head in
       let root = map_node f v.root in
-      let tail = Array.map f v.tail in
+      let tail = amap_local f v.tail in
       Vector { v with root; tail; head }
 
 let append_array v values =
@@ -1496,12 +1537,12 @@ let rev = function
 exception Predicate_found
 exception Predicate_failed
 
-let array_raise_exists p values =
+let array_raise_exists (p @ local) (values @ local) =
   for index = 0 to Array.length values - 1 do
     if p (Array.unsafe_get values index) then raise Predicate_found
   done
 
-let rec node_raise_exists p = function
+let rec node_raise_exists (p @ local) (n @ local) = match n with
   | Empty -> ()
   | Leaf values -> array_raise_exists p values
   | Branch branch ->
@@ -1510,7 +1551,7 @@ let rec node_raise_exists p = function
         node_raise_exists p (Array.unsafe_get children index)
       done
 
-let exists p v =
+let exists (p @ local) (v @ local) = 
   match v with
   | Empty_vector -> false
   | Vector v ->
@@ -1521,12 +1562,12 @@ let exists p v =
          false
        with Predicate_found -> true)
 
-let array_raise_for_all p values =
+let array_raise_for_all (p @ local) (values @ local) =
   for index = 0 to Array.length values - 1 do
     if not (p (Array.unsafe_get values index)) then raise Predicate_failed
   done
 
-let rec node_raise_for_all p = function
+let rec node_raise_for_all (p @ local) (n @ local) = match n with
   | Empty -> ()
   | Leaf values -> array_raise_for_all p values
   | Branch branch ->
@@ -1535,7 +1576,7 @@ let rec node_raise_for_all p = function
         node_raise_for_all p (Array.unsafe_get children index)
       done
 
-let for_all p v =
+let for_all (p @ local) (v @ local) = 
   match v with
   | Empty_vector -> true
   | Vector v ->
@@ -1546,13 +1587,13 @@ let for_all p v =
          true
        with Predicate_failed -> false)
 
-let array_raise_find p found values =
+let array_raise_find (p @ local) found (values @ local) =
   for index = 0 to Array.length values - 1 do
     let value = Array.unsafe_get values index in
     if p value then found value
   done
 
-let rec node_raise_find p found = function
+let rec node_raise_find (p @ local) found (n @ local) = match n with
   | Empty -> ()
   | Leaf values -> array_raise_find p found values
   | Branch branch ->
@@ -1561,7 +1602,7 @@ let rec node_raise_find p found = function
         node_raise_find p found (Array.unsafe_get children index)
       done
 
-let find_opt p v =
+let find_opt p v = 
   match v with
   | Empty_vector -> None
   | Vector v ->
@@ -1578,7 +1619,7 @@ let find_opt p v =
          None
        with Found -> !result)
 
-let find p v =
+let find p v = 
   match v with
   | Empty_vector -> raise Not_found
   | Vector v ->
@@ -1595,12 +1636,12 @@ let find p v =
          raise Not_found
        with Found -> Option.get !result)
 
-let iter_array f values =
+let iter_array (f @ local) (values @ local) =
   for index = 0 to Array.length values - 1 do
     f (Array.unsafe_get values index)
   done
 
-let rec iter_node f = function
+let rec iter_node (f @ local) (n @ local) = match n with
   | Empty -> ()
   | Leaf values -> iter_array f values
   | Branch branch ->
@@ -1609,7 +1650,7 @@ let rec iter_node f = function
         iter_node f (Array.unsafe_get children index)
       done
 
-let iter f v =
+let iter (f @ local) (v @ local) = 
   match v with
   | Empty_vector -> ()
   | Vector v ->
@@ -1617,7 +1658,7 @@ let iter f v =
       iter_node f v.root;
       iter_array f v.tail
 
-let iteri_array f index values =
+let iteri_array (f @ local) index (values @ local) =
   let index = ref index in
   for offset = 0 to Array.length values - 1 do
     f !index (Array.unsafe_get values offset);
@@ -1625,7 +1666,7 @@ let iteri_array f index values =
   done;
   !index
 
-let rec iteri_node f index = function
+let rec iteri_node (f @ local) index = function
   | Empty -> index
   | Leaf values -> iteri_array f index values
   | Branch branch ->
@@ -1636,7 +1677,7 @@ let rec iteri_node f index = function
       done;
       !index
 
-let iteri f v =
+let iteri f v = 
   match v with
   | Empty_vector -> ()
   | Vector v ->
@@ -1681,7 +1722,7 @@ let mapi f v =
       let tail = mapi_array f index v.tail in
       Vector { count = v.count; root; tail; tailoff = v.tailoff; head }
 
-let find_map f v =
+let find_map (f @ local) (v @ local) = 
   let exception Found in
   let result = ref None in
   try
@@ -1696,7 +1737,8 @@ let find_map f v =
     None
   with Found -> !result
 
-let mem value v = exists (( = ) value) v
+let mem (value @ local) (v @ local) =
+  not (for_all (fun x -> x <> value) v)
 
 type cursor_phase = Root | Root_rest | Done
 
@@ -1874,32 +1916,6 @@ let rec for_all2_array_range predicate left left_index right right_index count =
   && for_all2_array_range predicate left (left_index + 1) right
        (right_index + 1) (count - 1))
 
-let equal equal_value left right =
-  let count = length left in
-  if count <> length right then false
-  else
-    match (left, right) with
-    | Empty_vector, Empty_vector -> true
-    | Vector left, Vector right ->
-        let left = make_leaf_cursor left in
-        let right = make_leaf_cursor right in
-        let rec loop remaining =
-          if remaining = 0 then true
-          else
-            let count = cursor_common_chunk_length left right remaining in
-            if
-              for_all2_array_range equal_value left.cursor_values
-                left.cursor_index right.cursor_values right.cursor_index count
-            then (
-              left.cursor_index <- left.cursor_index + count;
-              right.cursor_index <- right.cursor_index + count;
-              loop (remaining - count))
-            else false
-        in
-        loop count
-    | Empty_vector, Vector _ | Vector _, Empty_vector ->
-        invalid_arg "Rrbvec.equal: inconsistent empty vector"
-
 let rec compare_array_range compare_value left left_index right right_index count =
   if count = 0 then 0
   else
@@ -1912,36 +1928,6 @@ let rec compare_array_range compare_value left left_index right right_index coun
       compare_array_range compare_value left (left_index + 1) right
         (right_index + 1) (count - 1)
     else order
-
-let compare compare_value left right =
-  let left_count = length left in
-  let right_count = length right in
-  let common_count = min left_count right_count in
-  if common_count = 0 then Int.compare left_count right_count
-  else
-    match (left, right) with
-    | Vector left, Vector right ->
-        let left = make_leaf_cursor left in
-        let right = make_leaf_cursor right in
-        let rec loop remaining =
-          if remaining = 0 then Int.compare left_count right_count
-          else
-            let count = cursor_common_chunk_length left right remaining in
-            let order =
-              compare_array_range compare_value left.cursor_values
-                left.cursor_index right.cursor_values right.cursor_index count
-            in
-            if order = 0 then (
-              left.cursor_index <- left.cursor_index + count;
-              right.cursor_index <- right.cursor_index + count;
-              loop (remaining - count))
-            else order
-        in
-        loop common_count
-    | Empty_vector, Empty_vector
-    | Empty_vector, Vector _
-    | Vector _, Empty_vector ->
-        invalid_arg "Rrbvec.compare: inconsistent empty vector"
 
 let pairwise_count name left right =
   let count = length left in
@@ -2015,7 +2001,7 @@ let fold_left2 f acc left right =
     in
     loop acc count
 
-let for_all2 predicate left right =
+let for_all2 predicate left right = 
   let count = pairwise_count "Rrbvec.for_all2" left right in
   if count = 0 then true
   else
@@ -2044,7 +2030,7 @@ let rec exists2_array_range predicate left left_index right right_index count =
   || exists2_array_range predicate left (left_index + 1) right
        (right_index + 1) (count - 1))
 
-let exists2 predicate left right =
+let exists2 predicate left right = 
   let count = pairwise_count "Rrbvec.exists2" left right in
   if count = 0 then false
   else
@@ -2096,13 +2082,13 @@ let fold_right2 f left right acc =
     in
     loop acc count
 
-let assoc ?cmp key bindings =
+let assoc ?cmp key bindings = 
   match cmp with
   | None -> snd (find (fun (candidate, _) -> candidate = key) bindings)
   | Some cmp ->
       snd (find (fun (candidate, _) -> cmp candidate key = 0) bindings)
 
-let assoc_opt ?cmp key bindings =
+let assoc_opt ?cmp key bindings = 
   match cmp with
   | None ->
       find_map
@@ -2115,10 +2101,12 @@ let assoc_opt ?cmp key bindings =
           if cmp candidate key = 0 then Some value else None)
         bindings
 
-let mem_assoc ?cmp key bindings =
+let mem_assoc ?(cmp @ local) (key @ local) (bindings @ local) =
   match cmp with
-  | None -> exists (fun (candidate, _) -> candidate = key) bindings
-  | Some cmp -> exists (fun (candidate, _) -> cmp candidate key = 0) bindings
+  | None ->
+      not (for_all (fun (candidate, _) -> candidate <> key) bindings)
+  | Some cmp ->
+      not (for_all (fun (candidate, _) -> cmp candidate key <> 0) bindings)
 
 let remove_assoc ?cmp key bindings =
   let exception Found of int in
@@ -2348,7 +2336,7 @@ let rec filter_node p sink = function
         filter_node p sink (Array.unsafe_get children index)
       done
 
-let filter p v =
+let filter p v = 
   match v with
   | Empty_vector -> empty
   | Vector v ->
@@ -2374,7 +2362,7 @@ let rec filter_map_node f sink = function
         filter_map_node f sink (Array.unsafe_get children index)
       done
 
-let filter_map f v =
+let filter_map f v = 
   match v with
   | Empty_vector -> empty
   | Vector v ->
@@ -2628,12 +2616,331 @@ module Private = struct
   let invariants v = check_vector v
 end
 
-(* Borrow variant: like [to_seq] but the vector need only be local — the
-   resulting sequence is local as well. Implemented here (not delegated
-   through [to_seq]) so the lazy thunk may capture a local vector. *)
-let to_seq_local v =
-  let n = length v in
-  let rec go i () =
-    if i >= n then Stdlib.Seq.Nil else Stdlib.Seq.Cons (nth v i, go (i + 1))
+(* -- Borrow twins -----------------------------------------------------
+   Variants whose vector argument need only be local (a [@ local] borrow).
+   They allocate into the caller's region via [exclave_], so contained
+   values never escape. Helpers whose result mode follows their
+   argument's mode get a [_local] copy here; helpers returning scalars
+   just accept [@ local] params above. *)
+
+let rec get_node_local (node @ local) index =
+  match node with
+  | Empty -> invalid_index ()
+  | Leaf values -> exclave_ (Array.unsafe_get values index)
+  | Branch branch ->
+      let child_index, previous_size =
+        child_range branch.sizes branch.height index
+      in
+      exclave_
+        (get_node_local
+           (Array.unsafe_get branch.children child_index)
+           (index - previous_size))
+
+let nth_local (v @ local) index =
+  exclave_
+    (match v with
+    | Empty_vector -> invalid_index ()
+    | Vector v ->
+        if index < 0 || index >= v.count then invalid_index ();
+        let head_length = Array.length v.head in
+        if index < head_length then Array.unsafe_get v.head index
+        else if index >= v.tailoff then
+          Array.unsafe_get v.tail (index - v.tailoff)
+        else get_node_local v.root (index - head_length))
+
+let nth_opt_local (v @ local) index =
+  exclave_
+    (match v with
+    | Empty_vector -> None
+    | Vector v ->
+        if index < 0 || index >= v.count then None
+        else
+          let head_length = Array.length v.head in
+          if index < head_length then Some (Array.unsafe_get v.head index)
+          else if index >= v.tailoff then
+            Some (Array.unsafe_get v.tail (index - v.tailoff))
+          else Some (get_node_local v.root (index - head_length)))
+
+let peek_front_local (v @ local) =
+  exclave_
+    (match v with
+    | Empty_vector -> invalid_arg "empty vector"
+    | Vector v ->
+        if Array.length v.head > 0 then Array.unsafe_get v.head 0
+        else if v.root <> Empty then get_node_local v.root 0
+        else Array.unsafe_get v.tail 0)
+
+let peek_front_opt_local (v @ local) =
+  exclave_
+    (match v with
+    | Empty_vector -> None
+    | Vector v ->
+        Some
+          (if Array.length v.head > 0 then Array.unsafe_get v.head 0
+           else if v.root <> Empty then get_node_local v.root 0
+           else Array.unsafe_get v.tail 0))
+
+let peek_back_local (v @ local) =
+  exclave_
+    (match v with
+    | Empty_vector -> invalid_arg "empty vector"
+    | Vector v ->
+        let tail_length = Array.length v.tail in
+        if tail_length > 0 then Array.unsafe_get v.tail (tail_length - 1)
+        else if v.root <> Empty then
+          get_node_local v.root (node_count v.root - 1)
+        else
+          let head_length = Array.length v.head in
+          Array.unsafe_get v.head (head_length - 1))
+
+let peek_back_opt_local (v @ local) =
+  exclave_
+    (match v with
+    | Empty_vector -> None
+    | Vector v ->
+        Some
+          (let tail_length = Array.length v.tail in
+           if tail_length > 0 then Array.unsafe_get v.tail (tail_length - 1)
+           else if v.root <> Empty then
+             get_node_local v.root (node_count v.root - 1)
+           else
+             let head_length = Array.length v.head in
+             Array.unsafe_get v.head (head_length - 1)))
+
+let to_list_local (v @ local) =
+  let rec build i (v @ local) =
+    if i < 0 then exclave_ []
+    else exclave_ (nth_local v i :: build (i - 1) v)
   in
-  go 0
+  exclave_ (build (length v - 1) v)
+
+let to_array_local (v @ local) =
+  exclave_
+    (let n = length v in
+     if n = 0 then [||]
+     else begin
+       let r = amake_local n (nth_local v 0) in
+       for i = 1 to n - 1 do
+         aunsafe_set_local r i (nth_local v i)
+       done;
+       r
+     end)
+
+(* The tree-build helpers duplicated for the caller's region. *)
+let build_sizes_local (children @ local) =
+  let length = Array.length children in
+  let sizes = Array.make length 0 in
+  let count = ref 0 in
+  for i = 0 to length - 1 do
+    count := !count + node_count (Array.unsafe_get children i);
+    Array.unsafe_set sizes i !count
+  done;
+  sizes
+
+let make_strict_branch_node_local (children @ local) =
+  let length = Array.length children in
+  let count = ref 0 in
+  let child_height = node_height (Array.unsafe_get children 0) in
+  let height = child_height + 1 in
+  let child_capacity = capacity_for_height child_height in
+  let regular = ref true in
+  for i = 0 to length - 1 do
+    let child = Array.unsafe_get children i in
+    let child_count = node_count child in
+    count := !count + child_count;
+    if i < length - 1 then regular := !regular && child_count = child_capacity
+  done;
+  exclave_
+    (Branch
+       {
+         children;
+         sizes = (if !regular then None else Some (build_sizes_local children));
+         count = !count;
+         height;
+       })
+
+let make_branch_local (children @ local) =
+  let length = Array.length children in
+  if length = 1 then exclave_ (Array.unsafe_get children 0)
+  else exclave_ (make_strict_branch_node_local children)
+
+let rec build_level_local (nodes @ local) =
+  match node_height (Array.unsafe_get nodes 0) with
+  | height when height > 8 -> invalid_arg "vector too large"
+  | _ ->
+      let parent_count =
+        (Array.length nodes + width - 1) / width
+      in
+      if parent_count = 1 then exclave_ (Array.unsafe_get nodes 0)
+      else begin
+        let parents =
+          ainit_local parent_count (fun parent_index ->
+              let start = parent_index * width in
+              let stop = min (start + width) (Array.length nodes) in
+              exclave_ (make_branch_local (asub_local nodes start (stop - start))))
+        in
+        exclave_ (build_level_local parents)
+      end
+
+let root_of_full_chunks_rev_local (chunks_rev @ local) =
+  match chunks_rev with
+  | [] -> Empty
+  | first :: _ ->
+      let leaf_count =
+        let rec llen n = function
+          | [] -> n
+          | _ :: t -> llen (n + 1) t
+        in
+        llen 0 chunks_rev
+      in
+      let leaves = amake_local leaf_count (Leaf first) in
+      let rec fill index = function
+        | [] -> ()
+        | chunk :: rest ->
+            aunsafe_set_local leaves index (Leaf chunk);
+            fill (index - 1) rest
+      in
+      fill (leaf_count - 1) chunks_rev;
+      exclave_ (build_level_local leaves)
+
+let make_with_edges_local (head @ local) (root @ local) (tail @ local) =
+  let root_count = node_count root in
+  let count = Array.length head + root_count + Array.length tail in
+  if count = 0 then exclave_ Empty_vector
+  else
+    exclave_
+      (Vector
+         {
+           count;
+           root;
+           tail;
+           tailoff = Array.length head + root_count;
+           head;
+         })
+
+let finish_nonempty_chunks_local (chunks_rev @ local) (chunk @ local)
+    chunk_length =
+  let tail =
+    if chunk_length = width then chunk else asub_local chunk 0 chunk_length
+  in
+  exclave_
+    (make_with_edges_local [||] (root_of_full_chunks_rev_local chunks_rev) tail)
+
+let of_list_local (values @ local) =
+  exclave_
+    (match values with
+    | [] -> empty
+    | first :: rest ->
+        let first_chunk = amake_local width first in
+        let rec loop chunks_rev chunk chunk_length = function
+          | [] ->
+              exclave_
+                (finish_nonempty_chunks_local chunks_rev chunk chunk_length)
+          | value :: rest ->
+              if chunk_length = width then
+                let next_chunk = amake_local width value in
+                exclave_ (loop (chunk :: chunks_rev) next_chunk 1 rest)
+              else begin
+                aunsafe_set_local chunk chunk_length value;
+                exclave_ (loop chunks_rev chunk (chunk_length + 1) rest)
+              end
+        in
+        loop [] first_chunk 1 rest)
+
+let of_seq_local (values @ local) =
+  exclave_
+    (match values () with
+    | Seq.Nil -> empty
+    | Seq.Cons (first, rest) ->
+        let first_chunk = amake_local width first in
+        let rec loop chunks_rev chunk chunk_length values =
+          match values () with
+          | Seq.Nil ->
+              exclave_
+                (finish_nonempty_chunks_local chunks_rev chunk chunk_length)
+          | Seq.Cons (value, rest) ->
+              if chunk_length = width then
+                let next_chunk = amake_local width value in
+                exclave_ (loop (chunk :: chunks_rev) next_chunk 1 rest)
+              else begin
+                aunsafe_set_local chunk chunk_length value;
+                exclave_ (loop chunks_rev chunk (chunk_length + 1) rest)
+              end
+        in
+        loop [] first_chunk 1 rest)
+
+let of_array_local (values @ local) =
+  exclave_
+    (let count = Array.length values in
+     if count = 0 then empty
+     else begin
+       let tail_length =
+         let remainder = count mod width in
+         if count <= width then count
+         else if remainder = 0 then width
+         else remainder
+       in
+       let tail_start = count - tail_length in
+       let tail = asub_local values tail_start tail_length in
+       if tail_start = 0 then make_with_edges_local [||] Empty tail
+       else begin
+         let leaf_count = tail_start / width in
+         let leaves =
+           ainit_local leaf_count (fun leaf_index ->
+               let start = leaf_index * width in
+               exclave_ (Leaf (asub_local values start width)))
+         in
+         make_with_edges_local [||] (build_level_local leaves) tail
+       end
+     end)
+
+
+
+let equal (equal_value @ local) (left @ local) (right @ local) =
+  let count = length left in
+  if count <> length right then false
+  else begin
+    let rec loop i (equal_value @ local) (left @ local) (right @ local) =
+      if i >= count then true
+      else if equal_value (nth_local left i) (nth_local right i) then
+        loop (i + 1) equal_value left right
+      else false
+    in
+    loop 0 equal_value left right
+  end
+
+let compare (compare_value @ local) (left @ local) (right @ local) =
+  let left_count = length left in
+  let right_count = length right in
+  let common_count = min left_count right_count in
+  let rec loop i (compare_value @ local) (left @ local) (right @ local) =
+    if i >= common_count then Int.compare left_count right_count
+    else
+      let order = compare_value (nth_local left i) (nth_local right i) in
+      if order = 0 then loop (i + 1) compare_value left right
+      else order
+  in
+  loop 0 compare_value left right
+
+let drop_local n (v @ local) =
+  exclave_
+    (let count = length v in
+     if n >= count then empty
+     else begin
+       let rec take_elements i (v @ local) =
+         if i >= count then exclave_ []
+         else exclave_ (nth_local v i :: take_elements (i + 1) v)
+       in
+       of_list_local (take_elements n v)
+     end)
+
+let take_local n (v @ local) =
+  exclave_
+    (let stop = min n (length v) in
+     let rec take_elements i (v @ local) =
+       if i >= stop then exclave_ []
+       else exclave_ (nth_local v i :: take_elements (i + 1) v)
+     in
+     of_list_local (take_elements 0 v))
+
+let rest_local (v @ local) = exclave_ (drop_local 1 v)
