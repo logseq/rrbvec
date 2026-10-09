@@ -1,5 +1,4 @@
 (lang dune 3.23)
-(using melange 1.0)
 
 (name rrbvec)
 
@@ -22,8 +21,6 @@
  (description "Persistent RRB vector implementation for native, js_of_ocaml, and Melange.")
  (depends
   ocaml
-  js_of_ocaml
-  melange
   (alcotest :with-test)
   (batteries :with-test)
   (bechamel :with-test)

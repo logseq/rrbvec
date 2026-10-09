@@ -7,20 +7,20 @@ val empty : 'a t
 val singleton : 'a -> 'a t
 
 (** Return the number of values in the vector. *)
-val length : 'a t -> int
+val length : 'a t @ local -> int
 
 (** Return [true] when the vector has no values. *)
-val is_empty : 'a t -> bool
+val is_empty : 'a t @ local -> bool
 
 (** Return the value at [index].
 
     Raises [Invalid_argument] when [index] is negative or greater than or equal
     to [length v]. *)
-val nth : 'a t -> int -> 'a
+val nth : 'a t @ local -> int -> 'a
 
 (** Return the value at [index], or [None] when [index] is negative or greater
     than or equal to [length v]. *)
-val nth_opt : 'a t -> int -> 'a option
+val nth_opt : 'a t @ local -> int -> 'a option
 
 (** Return a vector where [index] contains [value].
 
@@ -51,20 +51,20 @@ val pop_front : 'a t -> ('a * 'a t) option
 (** Return the value at the front of the vector.
 
     Raises [Invalid_argument] when the vector is empty. *)
-val peek_front : 'a t -> 'a
+val peek_front : 'a t @ local -> 'a
 
 (** Return the value at the front of the vector, or [None] when the vector is
     empty. *)
-val peek_front_opt : 'a t -> 'a option
+val peek_front_opt : 'a t @ local -> 'a option
 
 (** Return the value at the back of the vector.
 
     Raises [Invalid_argument] when the vector is empty. *)
-val peek_back : 'a t -> 'a
+val peek_back : 'a t @ local -> 'a
 
 (** Return the value at the back of the vector, or [None] when the vector is
     empty. *)
-val peek_back_opt : 'a t -> 'a option
+val peek_back_opt : 'a t @ local -> 'a option
 
 (** Concatenate two vectors.
 
@@ -92,22 +92,22 @@ val append_array : 'a t -> 'a array -> 'a t
 val prepend_array : 'a t -> 'a array -> 'a t
 
 (** Fold over values from front to back. *)
-val fold_left : ('acc -> 'a -> 'acc) -> 'acc -> 'a t -> 'acc
+val fold_left : ('acc -> 'a -> 'acc) -> 'acc -> 'a t @ local -> 'acc
 
 (** Fold over values from back to front. *)
-val fold_right : ('a -> 'acc -> 'acc) -> 'a t -> 'acc -> 'acc
+val fold_right : ('a -> 'acc -> 'acc) -> 'a t @ local -> 'acc -> 'acc
 
 (** Return a vector containing [f] applied to each value. *)
-val map : ('a -> 'b) -> 'a t -> 'b t
+val map : ('a -> 'b) @ local -> 'a t @ local -> 'b t
 
 (** Return a vector containing the values that satisfy [p], preserving order. *)
-val filter : ('a -> bool) -> 'a t -> 'a t
+val filter : ('a -> bool) @ local -> 'a t @ local -> 'a t
 
 (** Return a vector containing the [Some] results of [f], preserving order. *)
-val filter_map : ('a -> 'b option) -> 'a t -> 'b t
+val filter_map : ('a -> 'b option) @ local -> 'a t @ local -> 'b t
 
 (** Map each value to a vector and concatenate the results in order. *)
-val concat_map : ('a -> 'b t) -> 'a t -> 'b t
+val concat_map : ('a -> 'b t) @ local -> 'a t @ local -> 'b t
 
 (** Return a vector containing [f] applied to matching values from two vectors.
 
@@ -130,62 +130,62 @@ val iter2 : ('a -> 'b -> unit) -> 'a t -> 'b t -> unit
     Raises [Invalid_argument] without calling [f] when the vectors have
     different lengths. *)
 val fold_left2 :
-  ('acc -> 'a -> 'b -> 'acc) -> 'acc -> 'a t -> 'b t -> 'acc
+  ('acc -> 'a -> 'b -> 'acc) -> 'acc -> 'a t @ local -> 'b t @ local -> 'acc
 
 (** Return [true] when [p] holds for every pair of matching values. Stops at
     the first failure.
 
     Raises [Invalid_argument] without calling [p] when the vectors have
     different lengths. *)
-val for_all2 : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool
+val for_all2 : ('a -> 'b -> bool) -> 'a t @ local -> 'b t @ local -> bool
 
 (** Return [true] when [p] holds for any pair of matching values. Stops at the
     first match.
 
     Raises [Invalid_argument] without calling [p] when the vectors have
     different lengths. *)
-val exists2 : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool
+val exists2 : ('a -> 'b -> bool) -> 'a t @ local -> 'b t @ local -> bool
 
 (** Fold over matching values from two vectors from back to front.
 
     Raises [Invalid_argument] without calling [f] when the vectors have
     different lengths. *)
 val fold_right2 :
-  ('a -> 'b -> 'acc -> 'acc) -> 'a t -> 'b t -> 'acc -> 'acc
+  ('a -> 'b -> 'acc -> 'acc) -> 'a t @ local -> 'b t @ local -> 'acc -> 'acc
 
 (** Return [true] when any value satisfies [p]. Stops at the first match. *)
-val exists : ('a -> bool) -> 'a t -> bool
+val exists : ('a -> bool) @ local -> 'a t @ local -> bool
 
 (** Return [true] when every value satisfies [p]. Stops at the first failure. *)
-val for_all : ('a -> bool) -> 'a t -> bool
+val for_all : ('a -> bool) @ local -> 'a t @ local -> bool
 
 (** Return the first value that satisfies [p].
 
     Raises [Not_found] when no value satisfies [p]. *)
-val find : ('a -> bool) -> 'a t -> 'a
+val find : ('a -> bool) @ local -> 'a t @ local -> 'a
 
 (** Return the first value that satisfies [p], or [None] when no value does. *)
-val find_opt : ('a -> bool) -> 'a t -> 'a option
+val find_opt : ('a -> bool) @ local -> 'a t @ local -> 'a option
 
 (** Return the first [Some] result of [f], or [None] when [f] returns [None] for
     every value. *)
-val find_map : ('a -> 'b option) -> 'a t -> 'b option
+val find_map : ('a -> 'b option) @ local -> 'a t @ local -> 'b option
 
 (** Return [true] when [value] is equal to one of the vector values. *)
-val mem : 'a -> 'a t -> bool
+val mem : 'a @ local -> 'a t @ local -> bool
 
 (** [equal eq left right] is [true] when [left] and [right] have the same
     length and [eq] holds for every pair of values at the same position.
 
     [eq] is not called when the vectors have different lengths. *)
-val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
+val equal : ('a -> 'a -> bool) @ local -> 'a t @ local -> 'a t @ local -> bool
 
 (** Compare two vectors lexicographically using [compare_value]. The empty
     vector is smaller than any non-empty vector.
 
     [compare_value] may be called even when the vectors have different
     lengths. *)
-val compare : ('a -> 'a -> int) -> 'a t -> 'a t -> int
+val compare : ('a -> 'a -> int) @ local -> 'a t @ local -> 'a t @ local -> int
 
 (** Return the value associated with [key] in [bindings]. Keys match when
     [cmp stored_key key = 0]. If multiple bindings have matching keys, return
@@ -193,14 +193,14 @@ val compare : ('a -> 'a -> int) -> 'a t -> 'a t -> int
     matched using structural equality.
 
     Raises [Not_found] when [key] has no binding. *)
-val assoc : ?cmp:('a -> 'a -> int) -> 'a -> ('a * 'b) t -> 'b
+val assoc : ?cmp:(('a -> 'a -> int) @ local) -> 'a @ local -> ('a * 'b) t @ local -> 'b
 
 (** Like [assoc], but return [None] when [key] has no binding. *)
-val assoc_opt : ?cmp:('a -> 'a -> int) -> 'a -> ('a * 'b) t -> 'b option
+val assoc_opt : ?cmp:(('a -> 'a -> int) @ local) -> 'a @ local -> ('a * 'b) t @ local -> 'b option
 
 (** Return [true] when [key] has a binding in [bindings]. When [cmp] is omitted,
     keys are matched using structural equality. *)
-val mem_assoc : ?cmp:('a -> 'a -> int) -> 'a -> ('a * 'b) t -> bool
+val mem_assoc : ?cmp:(('a -> 'a -> int) @ local) -> 'a @ local -> ('a * 'b) t @ local -> bool
 
 (** Return [bindings] without the first binding whose key matches [key], if
     any. Keys match when [cmp stored_key key = 0]. When [cmp] is omitted, keys
@@ -209,10 +209,10 @@ val remove_assoc :
   ?cmp:('a -> 'a -> int) -> 'a -> ('a * 'b) t -> ('a * 'b) t
 
 (** Apply [f] to each value from front to back. *)
-val iter : ('a -> unit) -> 'a t -> unit
+val iter : ('a -> unit) @ local -> 'a t @ local -> unit
 
 (** Apply [f] to each value and its index from front to back. *)
-val iteri : (int -> 'a -> unit) -> 'a t -> unit
+val iteri : (int -> 'a -> unit) @ local -> 'a t @ local -> unit
 
 (** Return a vector containing [f] applied to each index and value. *)
 val mapi : (int -> 'a -> 'b) -> 'a t -> 'b t
@@ -248,23 +248,28 @@ val subvec : 'a t -> int -> int -> 'a t option
 val concat : 'a t -> 'a t -> 'a t
 
 (** Build a vector containing the list values in order. *)
-val of_list : 'a list -> 'a t
+val of_list : 'a list @ local -> 'a t
 
 (** Return the vector values as a list in order. *)
-val to_list : 'a t -> 'a list
+val to_list : 'a t @ local -> 'a list
 
 (** Build a vector containing the sequence values in order. *)
-val of_seq : 'a Seq.t -> 'a t
+val of_seq : 'a Seq.t @ local -> 'a t
 
 (** Return the vector values as a lazy sequence in order. *)
 val to_seq : 'a t -> 'a Seq.t
 
+(** Like {!to_seq} but borrowed: [v] may be a [local] value and the
+    resulting sequence is itself [local] — it must be consumed within the
+    same region. *)
+val to_seq_local : 'a t @ local -> 'a Seq.t @ local
+
 (** Build a vector containing the array values in order. The input array is
     copied as needed; later mutations to the array do not affect the vector. *)
-val of_array : 'a array -> 'a t
+val of_array : 'a array @ local -> 'a t
 
 (** Return the vector values as a new array in order. *)
-val to_array : 'a t -> 'a array
+val to_array : 'a t @ local -> 'a array
 
 module Private : sig
   (** Return the target node arities used by Scala Quick concatenation for

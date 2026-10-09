@@ -2627,3 +2627,13 @@ module Private = struct
 
   let invariants v = check_vector v
 end
+
+(* Borrow variant: like [to_seq] but the vector need only be local — the
+   resulting sequence is local as well. Implemented here (not delegated
+   through [to_seq]) so the lazy thunk may capture a local vector. *)
+let to_seq_local v =
+  let n = length v in
+  let rec go i () =
+    if i >= n then Stdlib.Seq.Nil else Stdlib.Seq.Cons (nth v i, go (i + 1))
+  in
+  go 0
